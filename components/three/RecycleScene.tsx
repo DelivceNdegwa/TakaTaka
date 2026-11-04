@@ -3,81 +3,19 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import * as THREE from 'three';
+import { Environment, Lightformer } from '@react-three/drei';
+import { makeTrash, seeded } from './trash';
 
-// Paper waste tells the whole story, driven by scroll progress (0..1):
-// it falls into the billboard cage -> gets sorted by colour -> rises to spell TAKA.
-const PER = 420; // pieces per shape
-const SHAPES = 3; // crumpled ball, folded sheet, torn scrap
-const N = PER * SHAPES;
+// Real trash tells the whole story, driven by scroll progress (0..1):
+// it falls into the billboard cage -> is sorted by type -> rises to spell TAKA -> moss and vines grow over it.
+const COUNTS = [170, 150, 110, 230, 140, 130]; // can, bottle, carton, paper, cardboard, bag
+const N = COUNTS.reduce((a, b) => a + b, 0);
 const CAGE = { w: 6.4, h: 4, d: 1, y: 4.2 };
-
-// Real paper waste: kraft, cardboard, newsprint, office white, dirty white, green and red packaging
-const PAPER = [
-  { c: '#a8774a', w: 3 }, // kraft brown
-  { c: '#7a4f2a', w: 2 }, // cardboard
-  { c: '#5a3a1f', w: 1 }, // wet cardboard
-  { c: '#ffffff', w: 2 }, // office white
-  { c: '#e4dccb', w: 2 }, // dirty white
-  { c: '#c9c3b6', w: 1 }, // newsprint
-  { c: '#1e9e4a', w: 2 }, // green packaging
-  { c: '#c8321f', w: 1 }, // red packaging
-];
-const SORT_ORDER = [0, 1, 2, 5, 4, 3, 6, 7];
+export const STAGES = { fall: [0.07, 0.36], sort: [0.4, 0.58], form: [0.6, 0.76], grow: [0.78, 0.97] } as const;
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const span = (p: number, a: number, b: number) => clamp01((p - a) / (b - a));
-
-function seeded(seed: number) {
-  let s = seed;
-  return () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };
-}
-
-// Irregular paper geometry: dents and folds, flat shaded so every facet catches light differently
-function crumpled(r: () => number) {
-  const g = new THREE.IcosahedronGeometry(1, 2);
-  const pos = g.attributes.position as THREE.BufferAttribute;
-  const v = new THREE.Vector3();
-  const dents = Array.from({ length: 9 }, () => new THREE.Vector3(r() - 0.5, r() - 0.5, r() - 0.5).normalize());
-  for (let i = 0; i < pos.count; i++) {
-    v.fromBufferAttribute(pos, i);
-    let k = 0.82 + r() * 0.28;
-    dents.forEach((d) => { k -= Math.max(0, v.dot(d) - 0.55) * 0.9; });
-    v.multiplyScalar(k);
-    v.y *= 0.82;
-    pos.setXYZ(i, v.x, v.y, v.z);
-  }
-  return g.toNonIndexed();
-}
-function folded(r: () => number) {
-  const g = new THREE.PlaneGeometry(2, 1.5, 8, 6);
-  const pos = g.attributes.position as THREE.BufferAttribute;
-  const fold = r() * 0.6 - 0.3;
-  for (let i = 0; i < pos.count; i++) {
-    const x = pos.getX(i), y = pos.getY(i);
-    // one sharp fold, a soft curl and small creases
-    const z = -Math.abs(x - fold) * 0.55 + Math.sin(y * 2.4) * 0.12 + (r() - 0.5) * 0.06;
-    pos.setZ(i, z);
-  }
-  g.computeVertexNormals();
-  return g.toNonIndexed();
-}
-function torn(r: () => number) {
-  const shape = new THREE.Shape();
-  const n = 9;
-  for (let i = 0; i < n; i++) {
-    const a = (i / n) * Math.PI * 2;
-    const rad = 0.6 + r() * 0.5;
-    const x = Math.cos(a) * rad * 1.3, y = Math.sin(a) * rad;
-    if (i === 0) shape.moveTo(x, y); else shape.lineTo(x, y);
-  }
-  const g = new THREE.ExtrudeGeometry(shape, { depth: 0.04, bevelEnabled: false });
-  const pos = g.attributes.position as THREE.BufferAttribute;
-  for (let i = 0; i < pos.count; i++) pos.setZ(i, pos.getZ(i) + Math.sin(pos.getX(i) * 2) * 0.15);
-  g.center();
-  g.computeVertexNormals();
-  return g.toNonIndexed();
-}
 
 // Points that fill the word TAKA, read from the display font on a 2D canvas
 function wordPoints(count: number, family: string) {
@@ -98,55 +36,54 @@ function wordPoints(count: number, family: string) {
     const [x, y] = filled[Math.floor(r() * filled.length)] ?? [450, 150];
     out.push((x - 450) / 82 + 1.2, 4.6 - (y - 160) / 82, (r() - 0.5) * 0.5);
   }
-  return out;
+  return { out, filled };
 }
+const toWorld = ([x, y]: [number, number]) => new THREE.Vector3((x - 450) / 82 + 1.2, 4.6 - (y - 160) / 82, 0.35);
 
-function usePaperData() {
+function usePieceData() {
   return useMemo(() => {
     const r = seeded(7);
-    const weights = PAPER.flatMap((p, i) => Array(p.w).fill(i) as number[]);
-    const sky: number[] = [], cage: number[] = [], sorted: number[] = [], spin: number[] = [], delay: number[] = [], shade: number[] = [], size: number[] = [];
-    const colours = new Float32Array(N * 3);
-    const c = new THREE.Color();
-    const stackCount = new Array(PAPER.length).fill(0);
-    for (let i = 0; i < N; i++) {
-      const k = weights[Math.floor(r() * weights.length)];
-      shade.push(k);
-      // every sheet is a slightly different shade, like real dirty paper
-      c.set(PAPER[k].c).offsetHSL((r() - 0.5) * 0.02, (r() - 0.5) * 0.08, (r() - 0.5) * 0.08);
-      c.toArray(colours, i * 3);
-      const d = r();
-      delay.push(d);
-      cage.push((r() - 0.5) * (CAGE.w - 0.4), CAGE.y - CAGE.h / 2 + 0.15 + d * (CAGE.h - 0.3), (r() - 0.5) * (CAGE.d - 0.3));
-      sky.push((r() - 0.5) * 12, 10 + r() * 9, (r() - 0.5) * 5 + 1);
-      // sorting: one neat column per colour
-      const col = SORT_ORDER.indexOf(k);
-      const n = stackCount[k]++;
-      sorted.push((col - (PAPER.length - 1) / 2) * 1.05 + (r() - 0.5) * 0.5, 0.2 + (n % 60) * 0.075 + (r() - 0.5) * 0.05, (Math.floor(n / 60) - 1) * 0.5 + (r() - 0.5) * 0.3);
-      spin.push(r() * 6, r() * 6, r() * 6, 0.4 + r());
-      size.push(0.1 + r() * 0.09);
-    }
-    return { sky, cage, sorted, spin, delay, colours, shade, size };
+    const sky: number[] = [], cage: number[] = [], sorted: number[] = [], spin: number[] = [], delay: number[] = [], size: number[] = [], type: number[] = [];
+    let idx = 0;
+    COUNTS.forEach((n, t) => {
+      for (let k = 0; k < n; k++, idx++) {
+        type.push(t);
+        const d = r();
+        delay.push(d);
+        cage.push((r() - 0.5) * (CAGE.w - 0.5), CAGE.y - CAGE.h / 2 + 0.2 + d * (CAGE.h - 0.4), (r() - 0.5) * (CAGE.d - 0.35));
+        sky.push((r() - 0.5) * 12, 11 + r() * 9, (r() - 0.5) * 5 + 1);
+        // sorting: one pile per kind of waste
+        const col = t - (COUNTS.length - 1) / 2;
+        sorted.push(col * 1.25 + (r() - 0.5) * 0.7, 0.15 + (k / n) * 3.6 * (1 - Math.abs(col) * 0.08) + (r() - 0.5) * 0.12, (r() - 0.5) * 0.9);
+        spin.push(r() * 6, r() * 6, r() * 6, 0.4 + r());
+        size.push(0.8 + r() * 0.45);
+      }
+    });
+    return { sky, cage, sorted, spin, delay, size, type };
   }, []);
 }
 
-function Pieces({ progress }: { progress: MutableRefObject<number> }) {
-  const data = usePaperData();
+function Pieces({ progress, word }: { progress: MutableRefObject<number>; word: number[] | null }) {
+  const data = usePieceData();
+  const [defs] = useState(() => (typeof document === 'undefined' ? [] : makeTrash()));
   const meshes = useRef<(THREE.InstancedMesh | null)[]>([]);
-  const [word, setWord] = useState<number[] | null>(null);
+  const offsets = useMemo(() => COUNTS.map((_, t) => COUNTS.slice(0, t).reduce((a, b) => a + b, 0)), []);
+  const moss = useMemo(() => new THREE.Color('#3f8a3c'), []);
+  const tmp = useMemo(() => new THREE.Color(), []);
+  const base = useMemo(() => {
+    const r = seeded(31);
+    return defs.map((d, t) => Array.from({ length: COUNTS[t] }, () => new THREE.Color(d.tints[Math.floor(r() * d.tints.length)])));
+  }, [defs]);
+  const lastGrow = useRef(-1);
 
+  // starting tints
   useEffect(() => {
-    const family = getComputedStyle(document.documentElement).getPropertyValue('--font-display') || 'sans-serif';
-    document.fonts.load(`900 260px ${family}`).finally(() => setWord(wordPoints(N, family)));
-  }, []);
-
-  const geos = useMemo(() => {
-    const r = seeded(3);
-    return [crumpled(r), folded(r), torn(r)].map((g, s) => {
-      g.setAttribute('color', new THREE.InstancedBufferAttribute(data.colours.slice(s * PER * 3, (s + 1) * PER * 3), 3));
-      return g;
+    meshes.current.forEach((m, t) => {
+      if (!m) return;
+      base[t].forEach((c, j) => m.setColorAt(j, c));
+      if (m.instanceColor) m.instanceColor.needsUpdate = true;
     });
-  }, [data]);
+  }, [base]);
 
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const a = useMemo(() => new THREE.Vector3(), []);
@@ -155,23 +92,24 @@ function Pieces({ progress }: { progress: MutableRefObject<number> }) {
   useFrame(({ clock }) => {
     const p = progress.current;
     const time = clock.elapsedTime;
-    for (let s = 0; s < SHAPES; s++) {
-      const m = meshes.current[s];
+    const growP = span(p, STAGES.grow[0], STAGES.grow[1]);
+    for (let t = 0; t < COUNTS.length; t++) {
+      const m = meshes.current[t];
       if (!m) continue;
-      for (let j = 0; j < PER; j++) {
-        const i = s * PER + j;
+      const def = defs[t];
+      for (let j = 0; j < COUNTS[t]; j++) {
+        const i = offsets[t] + j;
         const i3 = i * 3;
         const d = data.delay[i];
-        const fall = ease(span(p, 0.06 + d * 0.26, 0.14 + d * 0.26));
-        const sort = ease(span(p, 0.42 + d * 0.1, 0.52 + d * 0.1));
-        const form = ease(span(p, 0.68 + d * 0.14, 0.8 + d * 0.14));
+        const fall = ease(span(p, STAGES.fall[0] + d * 0.24, STAGES.fall[0] + 0.07 + d * 0.24));
+        const sort = ease(span(p, STAGES.sort[0] + d * 0.08, STAGES.sort[0] + 0.1 + d * 0.08));
+        const form = ease(span(p, STAGES.form[0] + d * 0.06, STAGES.form[0] + 0.1 + d * 0.06));
         a.set(data.sky[i3], data.sky[i3 + 1], data.sky[i3 + 2]);
         b.set(data.cage[i3], data.cage[i3 + 1], data.cage[i3 + 2]);
         a.lerp(b, fall);
         b.set(data.sorted[i3], data.sorted[i3 + 1], data.sorted[i3 + 2]);
-        // lift as it travels, so pieces arc out of the cage instead of sliding through it
         a.lerp(b, sort);
-        a.y += Math.sin(sort * Math.PI) * 1.5;
+        a.y += Math.sin(sort * Math.PI) * 1.4;
         if (word) {
           b.set(word[i3], word[i3 + 1], word[i3 + 2]);
           a.lerp(b, form);
@@ -180,22 +118,122 @@ function Pieces({ progress }: { progress: MutableRefObject<number> }) {
         dummy.position.copy(a);
         const s4 = i * 4;
         const loose = (1 - fall) + Math.sin(sort * Math.PI) + Math.sin(form * Math.PI);
-        dummy.rotation.set(data.spin[s4] + time * data.spin[s4 + 3] * loose, data.spin[s4 + 1] + time * 0.7 * loose, data.spin[s4 + 2] * (1 - form * 0.7));
-        dummy.scale.setScalar(data.size[i] * (1 - form * 0.15));
+        dummy.rotation.set(data.spin[s4] + time * data.spin[s4 + 3] * loose, data.spin[s4 + 1] + time * 0.7 * loose, data.spin[s4 + 2]);
+        dummy.scale.setScalar(def.size * data.size[i] * (1 - form * 0.2));
         dummy.updateMatrix();
         m.setMatrixAt(j, dummy.matrix);
       }
       m.instanceMatrix.needsUpdate = true;
     }
+    // moss creeps over the letters: paper and card turn green first, from the bottom up
+    if (Math.abs(growP - lastGrow.current) > 0.004 && word) {
+      lastGrow.current = growP;
+      meshes.current.forEach((m, t) => {
+        if (!m) return;
+        const soft = t >= 2 && t <= 4;
+        for (let j = 0; j < COUNTS[t]; j++) {
+          const i = offsets[t] + j;
+          const y = word[i * 3 + 1];
+          const k = clamp01((growP * 1.6 - (y - 2.6) / 4)) * (soft ? 0.85 : 0.35);
+          tmp.copy(base[t][j]).lerp(moss, k);
+          m.setColorAt(j, tmp);
+        }
+        if (m.instanceColor) m.instanceColor.needsUpdate = true;
+      });
+    }
   });
 
   return (
     <>
-      {geos.map((g, s) => (
-        <instancedMesh key={s} ref={(el) => { meshes.current[s] = el; }} args={[g, undefined, PER]} castShadow receiveShadow frustumCulled={false}>
-          <meshStandardMaterial vertexColors roughness={0.92} side={THREE.DoubleSide} flatShading />
-        </instancedMesh>
+      {defs.map((d, t) => (
+        <instancedMesh key={d.kind} ref={(el) => { meshes.current[t] = el; }} args={[d.geometry, d.material, COUNTS[t]]} castShadow={d.kind !== 'bottle' && d.kind !== 'bag'} receiveShadow frustumCulled={false} />
       ))}
+    </>
+  );
+}
+
+// Vines that climb through the letters, sprouting leaves as they grow
+function Vines({ progress, filled }: { progress: MutableRefObject<number>; filled: [number, number][] | null }) {
+  const leaves = useRef<THREE.InstancedMesh>(null);
+  const tubes = useRef<THREE.Mesh[]>([]);
+  const built = useMemo(() => {
+    if (!filled?.length) return null;
+    const r = seeded(77);
+    const curves: THREE.CatmullRomCurve3[] = [];
+    for (let v = 0; v < 26; v++) {
+      // a walk through the filled letter pixels, from low to high
+      let cur = filled[Math.floor(r() * filled.length)];
+      const pts = [toWorld(cur)];
+      for (let s = 0; s < 9; s++) {
+        let best = cur, bestScore = -Infinity;
+        for (let tries = 0; tries < 24; tries++) {
+          const cand = filled[Math.floor(r() * filled.length)];
+          const dx = cand[0] - cur[0], dy = cand[1] - cur[1];
+          const dist = Math.hypot(dx, dy);
+          if (dist < 12 || dist > 60) continue;
+          const score = -dy * 0.6 - Math.abs(dist - 34) + r() * 10;
+          if (score > bestScore) { bestScore = score; best = cand; }
+        }
+        cur = best;
+        const w = toWorld(cur);
+        w.z += (r() - 0.5) * 0.3;
+        pts.push(w);
+      }
+      curves.push(new THREE.CatmullRomCurve3(pts));
+    }
+    const geos = curves.map((c) => new THREE.TubeGeometry(c, 90, 0.035 + r() * 0.03, 6, false));
+    const leafSpots = curves.flatMap((c, ci) => Array.from({ length: 14 }, (_, k) => ({ c: ci, t: (k + 0.5 + r() * 0.5) / 14, rot: r() * Math.PI * 2, s: 0.12 + r() * 0.14 })));
+    const leaf = new THREE.ShapeGeometry(new THREE.Shape().moveTo(0, 0).quadraticCurveTo(0.5, 0.4, 0, 1.2).quadraticCurveTo(-0.5, 0.4, 0, 0));
+    return { curves, geos, leafSpots, leaf };
+  }, [filled]);
+
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+  useFrame(() => {
+    if (!built) return;
+    const g = span(progress.current, STAGES.grow[0], STAGES.grow[1]);
+    built.geos.forEach((geo, i) => {
+      const local = clamp01(g * 1.4 - (i % 5) * 0.06);
+      geo.setDrawRange(0, Math.floor((geo.index?.count ?? 0) * local));
+    });
+    const m = leaves.current;
+    if (!m) return;
+    built.leafSpots.forEach((l, i) => {
+      const local = clamp01(g * 1.4 - (l.c % 5) * 0.06);
+      const grow = clamp01((local - l.t) * 8);
+      const pt = built.curves[l.c].getPointAt(l.t);
+      dummy.position.copy(pt);
+      dummy.rotation.set(0.4, 0, l.rot);
+      dummy.scale.setScalar(l.s * ease(grow) + 0.0001);
+      dummy.updateMatrix();
+      m.setMatrixAt(i, dummy.matrix);
+    });
+    m.instanceMatrix.needsUpdate = true;
+  });
+  if (!built) return null;
+  return (
+    <group>
+      {built.geos.map((geo, i) => (
+        <mesh key={i} geometry={geo} ref={(el) => { if (el) tubes.current[i] = el; }} castShadow>
+          <meshStandardMaterial color="#2f6e2e" roughness={0.7} />
+        </mesh>
+      ))}
+      <instancedMesh ref={leaves} args={[built.leaf, undefined, built.leafSpots.length]} castShadow frustumCulled={false}>
+        <meshStandardMaterial color="#4f9a45" roughness={0.6} side={THREE.DoubleSide} />
+      </instancedMesh>
+    </group>
+  );
+}
+
+function Trash({ progress }: { progress: MutableRefObject<number> }) {
+  const [word, setWord] = useState<{ out: number[]; filled: [number, number][] } | null>(null);
+  useEffect(() => {
+    const family = getComputedStyle(document.documentElement).getPropertyValue('--font-display') || 'sans-serif';
+    document.fonts.load(`900 260px ${family}`).finally(() => setWord(wordPoints(N, family)));
+  }, []);
+  return (
+    <>
+      <Pieces progress={progress} word={word?.out ?? null} />
+      <Vines progress={progress} filled={word?.filled ?? null} />
     </>
   );
 }
@@ -297,7 +335,7 @@ function Park() {
       return { x, z: -34 - r() * 10, h: 2 + r() * (Math.abs(x + 4) < 12 ? 13 : 6), w: 1.4 + r() * 2.4 };
     });
   }, []);
-  const acacias = useMemo(() => [[-10, -9, 1.2], [-15, -14, 1.5], [9.5, -8, 1.1], [15, -16, 1.6], [-6, -20, 1], [21, -22, 1.3]] as const, []);
+  const acacias = useMemo(() => [[-19, -12, 1.2], [-25, -18, 1.5], [9.5, -8, 1.1], [15, -16, 1.6], [-14, -28, 1], [21, -22, 1.3]] as const, []);
   return (
     <group>
       {city.map((b, i) => (
@@ -361,9 +399,16 @@ export function RecycleScene({ progress }: { progress: MutableRefObject<number> 
       <hemisphereLight args={['#ffffff', '#a9c49a', 1.5]} />
       <directionalLight position={[-7, 12, 8]} intensity={2.6} color="#fff6e6" castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-12} shadow-camera-right={12} shadow-camera-top={12} shadow-camera-bottom={-4} shadow-bias={-0.0004} />
       <directionalLight position={[6, 4, -6]} intensity={0.5} color="#e8f5ea" />
+      {/* soft studio reflections for metal and plastic, generated, no image download */}
+      <Environment resolution={128} frames={1}>
+        <Lightformer intensity={2} position={[0, 6, 4]} scale={[12, 4, 1]} color="#ffffff" />
+        <Lightformer intensity={1.2} position={[-6, 2, 2]} rotation-y={Math.PI / 2} scale={[8, 3, 1]} color="#e8f5ea" />
+        <Lightformer intensity={0.8} position={[6, 1, -2]} rotation-y={-Math.PI / 2} scale={[8, 3, 1]} color="#fff2dc" />
+        <Lightformer intensity={0.6} position={[0, -3, 0]} rotation-x={Math.PI / 2} scale={[20, 20, 1]} color="#a9c49a" />
+      </Environment>
       <Rig progress={progress} />
       <Billboard progress={progress} />
-      <Pieces progress={progress} />
+      <Trash progress={progress} />
       <Park />
       <Clouds progress={progress} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.5, 0]} receiveShadow>

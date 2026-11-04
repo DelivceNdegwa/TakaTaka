@@ -3,54 +3,80 @@
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { RoundedBox } from '@react-three/drei';
+import { Environment, Lightformer, RoundedBox } from '@react-three/drei';
+import { bottleGeometry, bottleTexture, canGeometry, canTexture, cardboardGeometry, cardboardTexture, cartonGeometry, cartonTexture, newsTexture, paperGeometry } from './trash';
 
-export type Target = 'plastic' | 'organic' | 'paper' | 'river';
-export type Item = { name: string; bin: Exclude<Target, 'river'>; kind: 'bottle' | 'can' | 'peel' | 'scraps' | 'paper' | 'box' };
+export type Target = 'plastic' | 'organic' | 'paper';
+export type Item = { name: string; bin: Target; kind: 'bottle' | 'can' | 'peel' | 'maize' | 'paper' | 'box' | 'carton' };
 
 export const ITEMS: Item[] = [
   { name: 'Plastic bottle', bin: 'plastic', kind: 'bottle' },
   { name: 'Soda can', bin: 'plastic', kind: 'can' },
   { name: 'Banana peel', bin: 'organic', kind: 'peel' },
-  { name: 'Sukuma and food scraps', bin: 'organic', kind: 'scraps' },
-  { name: 'Old newspaper', bin: 'paper', kind: 'paper' },
-  { name: 'Cardboard box', bin: 'paper', kind: 'box' },
+  { name: 'Maize cob', bin: 'organic', kind: 'maize' },
+  { name: 'Crumpled newspaper', bin: 'paper', kind: 'paper' },
+  { name: 'Flattened cardboard', bin: 'paper', kind: 'box' },
+  { name: 'Milk carton', bin: 'paper', kind: 'carton' },
 ];
 
 export const TARGETS: { id: Target; label: string; x: number; colour: string }[] = [
-  { id: 'plastic', label: 'Plastics and metals', x: -4.2, colour: '#1e9e4a' },
-  { id: 'organic', label: 'Organic', x: -1.4, colour: '#6b3f1d' },
-  { id: 'paper', label: 'Paper and card', x: 1.4, colour: '#ffffff' },
-  { id: 'river', label: 'The river', x: 4.6, colour: '#3a5a52' },
+  { id: 'plastic', label: 'Plastics and metals', x: -3, colour: '#1e9e4a' },
+  { id: 'organic', label: 'Organic', x: 0, colour: '#6b3f1d' },
+  { id: 'paper', label: 'Paper and card', x: 3, colour: '#ffffff' },
 ];
 const BIN_Z = -5;
 
+// A peel with brown speckles, curled the way it lands
+function peelTexture() {
+  const c = document.createElement('canvas'); c.width = c.height = 256;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#e8c832'; g.fillRect(0, 0, 256, 256);
+  for (let i = 0; i < 90; i++) { g.fillStyle = `rgba(90,55,20,${0.3 + Math.random() * 0.5})`; g.beginPath(); g.arc(Math.random() * 256, Math.random() * 256, 1 + Math.random() * 5, 0, Math.PI * 2); g.fill(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
 function ItemShape({ kind }: { kind: Item['kind'] }) {
-  switch (kind) {
-    case 'bottle':
-      return (
-        <group>
-          <mesh castShadow><cylinderGeometry args={[0.22, 0.22, 0.8, 20]} /><meshStandardMaterial color="#9fd0e6" roughness={0.15} transparent opacity={0.85} /></mesh>
-          <mesh position={[0, 0.5, 0]} castShadow><cylinderGeometry args={[0.1, 0.2, 0.22, 20]} /><meshStandardMaterial color="#9fd0e6" roughness={0.15} transparent opacity={0.85} /></mesh>
-          <mesh position={[0, 0.66, 0]}><cylinderGeometry args={[0.1, 0.1, 0.1, 16]} /><meshStandardMaterial color="#2a5bd7" /></mesh>
-        </group>
-      );
-    case 'can':
-      return <mesh castShadow><cylinderGeometry args={[0.24, 0.24, 0.62, 24]} /><meshStandardMaterial color="#d9452b" metalness={0.8} roughness={0.25} /></mesh>;
-    case 'peel':
-      return <mesh castShadow rotation={[0, 0, 0.6]}><torusGeometry args={[0.35, 0.1, 10, 24, Math.PI]} /><meshStandardMaterial color="#e5c33a" roughness={0.7} /></mesh>;
-    case 'scraps':
-      return (
-        <group>
-          <mesh castShadow><icosahedronGeometry args={[0.28, 0]} /><meshStandardMaterial color="#4f7a3a" roughness={0.9} flatShading /></mesh>
-          <mesh position={[0.25, -0.05, 0.1]} castShadow><icosahedronGeometry args={[0.18, 0]} /><meshStandardMaterial color="#7a4a22" roughness={0.9} flatShading /></mesh>
-        </group>
-      );
-    case 'paper':
-      return <mesh castShadow rotation={[0.3, 0.4, 0.1]}><boxGeometry args={[0.8, 0.06, 0.6]} /><meshStandardMaterial color="#e8e2d2" roughness={0.95} /></mesh>;
-    case 'box':
-      return <mesh castShadow><boxGeometry args={[0.6, 0.45, 0.5]} /><meshStandardMaterial color="#b8895a" roughness={0.9} /></mesh>;
+  const parts = useMemo(() => {
+    switch (kind) {
+      case 'can': return { geo: canGeometry(), mat: new THREE.MeshStandardMaterial({ map: canTexture(), color: '#d42a1e', metalness: 0.85, roughness: 0.3 }), scale: 0.62 };
+      case 'bottle': return { geo: bottleGeometry(), mat: new THREE.MeshPhysicalMaterial({ map: bottleTexture(), transparent: true, roughness: 0.06, clearcoat: 1, side: THREE.DoubleSide, depthWrite: false }), scale: 0.6 };
+      case 'paper': return { geo: paperGeometry(), mat: new THREE.MeshStandardMaterial({ map: newsTexture(), roughness: 0.95, flatShading: true }), scale: 0.9 };
+      case 'box': return { geo: cardboardGeometry(), mat: new THREE.MeshStandardMaterial({ map: cardboardTexture(), roughness: 0.95 }), scale: 0.8 };
+      case 'carton': return { geo: cartonGeometry(), mat: new THREE.MeshStandardMaterial({ map: cartonTexture(), roughness: 0.5 }), scale: 0.7 };
+      default: return null;
+    }
+  }, [kind]);
+  const peel = useMemo(() => (kind === 'peel' ? new THREE.MeshStandardMaterial({ map: peelTexture(), roughness: 0.7, side: THREE.DoubleSide }) : null), [kind]);
+  if (parts) return <mesh geometry={parts.geo} material={parts.mat} scale={parts.scale} castShadow />;
+  if (kind === 'peel') {
+    // three curling strips joined at the stem
+    return (
+      <group rotation={[0.3, 0, 0]}>
+        {[0, 2.1, 4.2].map((a, i) => (
+          <mesh key={i} rotation={[0, a, 0]} position={[Math.sin(a) * 0.12, 0, Math.cos(a) * 0.12]} material={peel!} castShadow>
+            <cylinderGeometry args={[0.32, 0.18, 0.9, 10, 6, true, -0.45, 0.9]} />
+          </mesh>
+        ))}
+        <mesh position={[0, 0.5, 0]}><cylinderGeometry args={[0.05, 0.07, 0.22, 8]} /><meshStandardMaterial color="#5a4520" /></mesh>
+      </group>
+    );
   }
+  // maize cob: kernels in rows, with dry husk leaves
+  return (
+    <group rotation={[0, 0, 0.5]}>
+      <mesh castShadow>
+        <capsuleGeometry args={[0.2, 0.75, 8, 18]} />
+        <meshStandardMaterial color="#e9b63c" roughness={0.55} />
+      </mesh>
+      {Array.from({ length: 48 }, (_, i) => {
+        const a = (i % 12) / 12 * Math.PI * 2, y = Math.floor(i / 12) * 0.2 - 0.3;
+        return <mesh key={i} position={[Math.cos(a) * 0.2, y, Math.sin(a) * 0.2]}><sphereGeometry args={[0.055, 6, 5]} /><meshStandardMaterial color="#f2c64a" roughness={0.4} /></mesh>;
+      })}
+      {[0, 2, 4].map((a, i) => (
+        <mesh key={i} rotation={[0, a, 0.25]} position={[0, -0.45, 0]}><cylinderGeometry args={[0.28, 0.1, 0.7, 8, 1, true, 0, 1.4]} /><meshStandardMaterial color="#c9b98a" roughness={0.9} side={THREE.DoubleSide} /></mesh>
+      ))}
+    </group>
+  );
 }
 
 function Bin({ x, colour, label, open }: { x: number; colour: string; label: string; open: number }) {
@@ -72,26 +98,6 @@ function Bin({ x, colour, label, open }: { x: number; colour: string; label: str
         </RoundedBox>
       </group>
       <Label text={label} position={[0, 2.55, 0]} />
-    </group>
-  );
-}
-
-// Nairobi River: dirtier with every piece that lands in it
-function River({ dirt }: { dirt: number }) {
-  const mat = useRef<THREE.MeshPhysicalMaterial>(null);
-  const clean = useMemo(() => new THREE.Color('#1b9ab8'), []);
-  const dirty = useMemo(() => new THREE.Color('#5a4a2c'), []);
-  useFrame(() => { mat.current?.color.copy(clean).lerp(dirty, Math.min(1, dirt)); });
-  return (
-    <group position={[TARGETS[3].x, 0, BIN_Z]}>
-      {/* a glossy water channel set into the floor, running off into the distance */}
-      <mesh position={[0, 0.04, -3]} receiveShadow>
-        <boxGeometry args={[2.4, 0.08, 14]} />
-        <meshPhysicalMaterial ref={mat} color="#1b9ab8" roughness={0.05} metalness={0.1} clearcoat={1} clearcoatRoughness={0.05} />
-      </mesh>
-      <mesh position={[-1.3, 0.1, -3]}><boxGeometry args={[0.2, 0.2, 14]} /><meshStandardMaterial color="#f2f2f2" /></mesh>
-      <mesh position={[1.3, 0.1, -3]}><boxGeometry args={[0.2, 0.2, 14]} /><meshStandardMaterial color="#f2f2f2" /></mesh>
-      <Label text="Nairobi River" position={[0, 0.8, 0.5]} bg="#1b9ab8" fg="#ffffff" />
     </group>
   );
 }
@@ -123,16 +129,15 @@ function Label({ text, position, bg = '#ffffff', fg = '#111611' }: { text: strin
 
 type Flight = { from: THREE.Vector3; to: THREE.Vector3; t: number; target: Target | 'street' };
 
-export type GameHandle = { throwTo: (t: Target) => void };
+export type GameHandle = { throwTo: (t: Target | 'street') => void };
 
 export const GameScene = forwardRef<GameHandle, {
   item: Item;
   busy: boolean;
-  dirt: number;
   litter: number;
   onLand: (where: Target | 'street') => void;
   onThrow: () => void;
-}>(function GameScene({ item, busy, dirt, litter, onLand, onThrow }, ref) {
+}>(function GameScene({ item, busy, litter, onLand, onThrow }, ref) {
   const held = useRef<THREE.Group>(null);
   const flight = useRef<Flight | null>(null);
   const drag = useRef<{ x: number; y: number; t: number; sx: number; sy: number } | null>(null);
@@ -145,15 +150,15 @@ export const GameScene = forwardRef<GameHandle, {
   const launch = (target: Target | 'street', x: number) => {
     if (flight.current || busy) return;
     onThrow();
-    const to = target === 'street' ? new THREE.Vector3(x, 0.15, BIN_Z + 2.2) : new THREE.Vector3(TARGETS.find((t) => t.id === target)!.x, target === 'river' ? 0.1 : 1.0, BIN_Z);
+    const to = target === 'street' ? new THREE.Vector3(x, 0.15, BIN_Z + 2.2) : new THREE.Vector3(TARGETS.find((t) => t.id === target)!.x, 1.0, BIN_Z);
     flight.current = { from: held.current!.position.clone(), to, t: 0, target };
   };
 
-  useImperativeHandle(ref, () => ({ throwTo: (t) => launch(t, 0) }));
+  useImperativeHandle(ref, () => ({ throwTo: (t) => launch(t, t === 'street' ? 0.6 : 0) }));
 
   const pickTarget = (x: number): Target | 'street' => {
     const near = TARGETS.reduce((best, t) => (Math.abs(t.x - x) < Math.abs(best.x - x) ? t : best));
-    return Math.abs(near.x - x) < (near.id === 'river' ? 1.4 : 0.9) ? near.id : 'street';
+    return Math.abs(near.x - x) < 1.0 ? near.id : 'street';
   };
 
   const down = (e: ThreeEvent<PointerEvent>) => {
@@ -209,10 +214,13 @@ export const GameScene = forwardRef<GameHandle, {
       <color attach="background" args={['#ffffff']} />
       <fog attach="fog" args={['#ffffff', 14, 32]} />
       <hemisphereLight args={['#ffffff', '#e6e6e6', 1.5]} />
+      <Environment resolution={64} frames={1}>
+        <Lightformer intensity={1.5} position={[0, 5, 5]} scale={[10, 3, 1]} />
+        <Lightformer intensity={0.6} position={[-6, 2, 0]} rotation-y={Math.PI / 2} scale={[6, 3, 1]} color="#e8f5ea" />
+      </Environment>
       <directionalLight position={[5, 10, 7]} intensity={2.4} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-10} shadow-camera-right={10} shadow-camera-top={10} shadow-camera-bottom={-10} shadow-radius={6} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow><planeGeometry args={[80, 60]} /><meshStandardMaterial color="#ffffff" roughness={0.9} /></mesh>
-      {TARGETS.slice(0, 3).map((t) => <Bin key={t.id} x={t.x} colour={t.colour} label={t.label} open={hover === t.id ? 1 : 0} />)}
-      <River dirt={dirt} />
+      {TARGETS.map((t) => <Bin key={t.id} x={t.x} colour={t.colour} label={t.label} open={hover === t.id ? 1 : 0} />)}
       {litterSpots.slice(0, litter).map((p, i) => (
         <mesh key={i} position={p as unknown as [number, number, number]} rotation={[0, i, 0.3]} castShadow><boxGeometry args={[0.3, 0.08, 0.2]} /><meshStandardMaterial color={['#9fd0e6', '#d9452b', '#e8e2d2', '#e5c33a'][i % 4]} /></mesh>
       ))}

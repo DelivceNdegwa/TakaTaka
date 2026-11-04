@@ -9,10 +9,11 @@ import { RecycleScene } from './three/RecycleScene';
 gsap.registerPlugin(ScrollTrigger);
 
 const STAGES = [
-  { at: 0.14, n: '01', title: 'Collected', text: 'Paper, card and packaging picked off Nairobi streets, estates and markets fill the cage instead of the drains.', right: true },
-  { at: 0.5, n: '02', title: 'Sorted', text: 'Kraft, cardboard, newsprint, white office paper. Sorted by type, every sheet becomes raw material again.' },
-  { at: 0.86, n: '03', title: 'Taka is value', text: 'What we throw away is a resource. Put it in the right place and it comes back as something new.' },
-];
+  { at: 0.2, n: '01', title: 'Collected', text: 'Cans, bottles, milk cartons, newspaper and bags picked off Nairobi streets fill the cage instead of the drains.', right: true },
+  { at: 0.49, n: '02', title: 'Sorted', text: 'Metal, plastic, cartons, paper and card. Sorted by type, each one is raw material again.' },
+  { at: 0.68, n: '03', title: 'Taka is value', text: 'What we throw away is a resource when it is in the right place.' },
+  { at: 0.88, n: '04', title: 'Green again', text: 'Less in the drains and dumps means more room for the green. Nature takes it back.' },
+]
 
 export function Story() {
   const root = useRef<HTMLElement>(null);
@@ -58,8 +59,8 @@ export function Story() {
         </div>
         <div className="story__vignette" />
         <div className="story__intro">
-          <h1>Tupa taka <em>mahali pake.</em></h1>
-          <p>Put waste in its place and it gets a second life. Scroll to watch a city’s waste get collected, sorted and turned into something worth keeping.</p>
+          <h1>Taka ni <em>mali.</em></h1>
+          <p>Waste is wealth when it is in the right place. Scroll to watch a city’s waste get collected, sorted and grown green again.</p>
           <span className="hint"><i aria-hidden="true" />Scroll to begin</span>
         </div>
         {STAGES.map((s, i) => (
