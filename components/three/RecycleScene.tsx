@@ -11,18 +11,15 @@ import { makeTrash, seeded } from './trash';
 import { buildForest, leafTexture, type TreeSpec } from './trees';
 
 // The story, driven by scroll progress (0..1):
-// trash lies inside steel TAKA letters on the ground -> flows into the rotating billboard ->
+// trash lies scattered on the grass among the trees -> flies into the steel TAKA letters ->
 // is sorted into heaps -> pressed into bales -> vines and moss claim the empty TAKA frames.
 const COUNTS = [150, 130, 100, 200, 120, 110]; // can, bottle, carton, paper, cardboard, bag
-const BB = { z: -3.2, y: 5.6, w: 6.4, h: 3.6, d: 1 };
-const LETTERS = { z: 2.2, size: 3.1, depth: 1.1 };
+const LETTERS = { z: 0, size: 3.4, depth: 1.2 };
 export const STAGES = { lift: [0.06, 0.34], sort: [0.4, 0.55], bale: [0.58, 0.7], grow: [0.76, 0.97] } as const;
 
 const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const span = (p: number, a: number, b: number) => clamp01((p - a) / (b - a));
-// the billboard turns once as it fills, then settles facing the camera
-const billboardAngle = (p: number) => ease(span(p, 0.04, 0.42)) * Math.PI * 2;
 
 // ---------- the steel TAKA letters ----------
 function inPoly(p: THREE.Vector2, poly: THREE.Vector2[]) {
@@ -95,31 +92,33 @@ function Letters({ progress, letters }: { progress: MutableRefObject<number>; le
 function usePieceData(letters: LettersData) {
   return useMemo(() => {
     const r = seeded(7);
-    const start: number[] = [], cage: number[] = [], heap: number[] = [], bale: number[] = [], spin: number[] = [], delay: number[] = [], size: number[] = [];
+    const ground: number[] = [], fill: number[] = [], heap: number[] = [], bale: number[] = [], spin: number[] = [], delay: number[] = [], size: number[] = [];
     const pt = new THREE.Vector2();
     COUNTS.forEach((n, t) => {
       const hx = (t - (COUNTS.length - 1) / 2) * 2.1;
       const side = Math.ceil(Math.cbrt(n));
       for (let k = 0; k < n; k++) {
-        // inside a letter
+        // scattered over the grass, clear of the letters
+        let gx = 0, gz = 0;
+        do { gx = (r() - 0.5) * 28; gz = -7 + r() * 17; } while (Math.abs(gx) < 7.5 && Math.abs(gz - LETTERS.z) < 1.4);
+        ground.push(gx, -0.42 + r() * 0.08, gz);
+        // its spot inside a letter
         let tries = 0;
         do { pt.set(letters.box.minX + r() * (letters.box.maxX - letters.box.minX), letters.box.minY + r() * (letters.box.maxY - letters.box.minY)); tries++; } while (!letters.inside(pt) && tries < 60);
-        start.push(pt.x, pt.y, LETTERS.z + (r() - 0.5) * (LETTERS.depth - 0.3));
-        const d = r();
-        delay.push(d);
-        cage.push((r() - 0.5) * (BB.w - 0.5), -BB.h / 2 + 0.2 + d * (BB.h - 0.4), (r() - 0.5) * (BB.d - 0.35));
+        fill.push(pt.x, pt.y, LETTERS.z + (r() - 0.5) * (LETTERS.depth - 0.3));
+        delay.push(r());
         // a heap per kind, in front of the letters
         const a = r() * Math.PI * 2, h = r(), rad = 0.95 * Math.sqrt(r()) * (1 - h * 0.85);
-        heap.push(hx + Math.cos(a) * rad, -0.4 + h * 1.4, 6.2 + Math.sin(a) * rad * 0.8);
+        heap.push(hx + Math.cos(a) * rad, -0.4 + h * 1.4, 4.4 + Math.sin(a) * rad * 0.8);
         // pressed into a cube bale
         const ix = k % side, iy = Math.floor(k / side) % side, iz = Math.floor(k / (side * side));
         const cell = 1.15 / side;
-        bale.push(hx - 0.575 + (ix + 0.5) * cell, -0.5 + (iy + 0.5) * cell, 6.2 - 0.575 + (iz + 0.5) * cell);
+        bale.push(hx - 0.575 + (ix + 0.5) * cell, -0.5 + (iy + 0.5) * cell, 4.4 - 0.575 + (iz + 0.5) * cell);
         spin.push(r() * 6, r() * 6, r() * 6, 0.4 + r());
         size.push(0.8 + r() * 0.4);
       }
     });
-    return { start, cage, heap, bale, spin, delay, size };
+    return { ground, fill, heap, bale, spin, delay, size };
   }, [letters]);
 }
 
@@ -147,8 +146,6 @@ function Pieces({ progress, letters }: { progress: MutableRefObject<number>; let
   useFrame(({ clock }) => {
     const p = progress.current;
     const time = clock.elapsedTime;
-    const ang = billboardAngle(p);
-    const ca = Math.cos(ang), sa = Math.sin(ang);
     for (let t = 0; t < COUNTS.length; t++) {
       const m = meshes.current[t];
       if (!m) continue;
@@ -160,12 +157,10 @@ function Pieces({ progress, letters }: { progress: MutableRefObject<number>; let
         const lift = ease(span(p, STAGES.lift[0] + d * 0.2, STAGES.lift[0] + 0.08 + d * 0.2));
         const sort = ease(span(p, STAGES.sort[0] + d * 0.06, STAGES.sort[0] + 0.09 + d * 0.06));
         const bale = ease(span(p, STAGES.bale[0] + d * 0.04, STAGES.bale[0] + 0.08 + d * 0.04));
-        a.set(data.start[i3], data.start[i3 + 1], data.start[i3 + 2]);
-        // into the turning billboard: its local cage spot, rotated with it
-        const lx = data.cage[i3], ly = data.cage[i3 + 1], lz = data.cage[i3 + 2];
-        b.set(lx * ca + lz * sa, BB.y + ly, BB.z - lx * sa + lz * ca);
+        a.set(data.ground[i3], data.ground[i3 + 1], data.ground[i3 + 2]);
+        b.set(data.fill[i3], data.fill[i3 + 1], data.fill[i3 + 2]);
         a.lerp(b, lift);
-        a.y += Math.sin(lift * Math.PI) * 2.2;
+        a.y += Math.sin(lift * Math.PI) * 2.6;
         b.set(data.heap[i3], data.heap[i3 + 1], data.heap[i3 + 2]);
         a.lerp(b, sort);
         a.y += Math.sin(sort * Math.PI) * 1.6;
@@ -174,7 +169,9 @@ function Pieces({ progress, letters }: { progress: MutableRefObject<number>; let
         dummy.position.copy(a);
         const s4 = i * 4;
         const loose = Math.sin(lift * Math.PI) + Math.sin(sort * Math.PI);
-        dummy.rotation.set(data.spin[s4] + time * data.spin[s4 + 3] * loose, data.spin[s4 + 1] + ang * lift * (1 - sort) + time * 0.6 * loose, data.spin[s4 + 2] * (1 - bale * 0.8));
+        // lying flat on the grass at first, tumbling while in flight
+        const flat = 1 - lift;
+        dummy.rotation.set(data.spin[s4] * (1 - flat * 0.75) + flat * Math.PI / 2 + time * data.spin[s4 + 3] * loose, data.spin[s4 + 1] + time * 0.6 * loose, data.spin[s4 + 2] * (1 - bale * 0.8));
         dummy.scale.setScalar(def.size * data.size[i] * (1 - bale * 0.3));
         dummy.updateMatrix();
         m.setMatrixAt(j, dummy.matrix);
@@ -261,50 +258,17 @@ function Vines({ progress, letters }: { progress: MutableRefObject<number>; lett
   );
 }
 
-// ---------- the rotating billboard ----------
-function Billboard({ progress }: { progress: MutableRefObject<number> }) {
-  const head = useRef<THREE.Group>(null);
-  const grid = useMemo(() => {
-    const pts: number[] = [];
-    const { w, h, d } = BB;
-    const x0 = -w / 2, y0 = -h / 2;
-    for (let i = 0; i <= 14; i++) { const x = x0 + (w * i) / 14; for (const z of [-d / 2, d / 2]) pts.push(x, y0, z, x, -y0, z); }
-    for (let j = 0; j <= 8; j++) { const y = y0 + (h * j) / 8; for (const z of [-d / 2, d / 2]) pts.push(x0, y, z, -x0, y, z); }
-    for (const x of [x0, -x0]) for (const y of [y0, -y0]) pts.push(x, y, -d / 2, x, y, d / 2);
-    pts.push(x0, y0, d / 2, -x0, -y0, d / 2, x0, -y0, d / 2, 0, 0, d / 2);
-    const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-    return g;
-  }, []);
-  useFrame(() => { if (head.current) head.current.rotation.y = billboardAngle(progress.current); });
-  return (
-    <group position={[0, 0, BB.z]}>
-      <group ref={head} position={[0, BB.y, 0]}>
-        <lineSegments geometry={grid}><lineBasicMaterial color="#3a3f3b" /></lineSegments>
-        <mesh position={[-BB.w / 2 + 0.9, BB.h / 2 - 0.3, BB.d / 2 + 0.02]}>
-          <boxGeometry args={[1.3, 0.36, 0.04]} />
-          <meshStandardMaterial color="#1e9e4a" />
-        </mesh>
-      </group>
-      <mesh position={[0, (BB.y - BB.h / 2) / 2 - 0.5, 0]} castShadow>
-        <cylinderGeometry args={[0.16, 0.2, BB.y - BB.h / 2 + 1, 16]} />
-        <meshStandardMaterial color="#4f7d8c" roughness={0.45} metalness={0.3} />
-      </mesh>
-    </group>
-  );
-}
-
 // ---------- the park: forest, skyline, hills, clouds ----------
 const TREES: TreeSpec[] = [
-  // about half the height of the TAKA letters
-  { x: -11, z: -2, scale: 0.42, kind: 'acacia', seed: 3 },
-  { x: -15, z: -8, scale: 0.5, kind: 'broadleaf', seed: 8 },
-  { x: -8.5, z: -11, scale: 0.4, kind: 'acacia', seed: 12 },
-  { x: 10.5, z: -3, scale: 0.42, kind: 'acacia', seed: 5 },
-  { x: 14.5, z: -9, scale: 0.52, kind: 'broadleaf', seed: 9 },
-  { x: 19, z: -14, scale: 0.46, kind: 'acacia', seed: 15 },
-  { x: 7, z: -15, scale: 0.4, kind: 'broadleaf', seed: 21 },
-  { x: -20, z: -16, scale: 0.48, kind: 'acacia', seed: 27 },
+  // about half the height of the TAKA letters, standing among the litter
+  { x: -10, z: -1, scale: 0.42, kind: 'acacia', seed: 3 },
+  { x: -14, z: -5, scale: 0.5, kind: 'broadleaf', seed: 8 },
+  { x: -7.5, z: -6, scale: 0.4, kind: 'acacia', seed: 12 },
+  { x: 9.5, z: -1.5, scale: 0.44, kind: 'acacia', seed: 5 },
+  { x: 13.5, z: -6, scale: 0.52, kind: 'broadleaf', seed: 9 },
+  { x: 17, z: 2, scale: 0.46, kind: 'acacia', seed: 15 },
+  { x: 5.5, z: -8, scale: 0.4, kind: 'broadleaf', seed: 21 },
+  { x: -18, z: 1, scale: 0.48, kind: 'acacia', seed: 27 },
 ];
 
 function Forest() {
@@ -394,12 +358,12 @@ function Rig({ progress }: { progress: MutableRefObject<number> }) {
   const look = useMemo(() => new THREE.Vector3(), []);
   useFrame(() => {
     const p = progress.current;
-    const up = Math.sin(span(p, 0.06, 0.4) * Math.PI); // rise to watch the billboard fill
+    const fly = Math.sin(span(p, 0.04, 0.38) * Math.PI); // pull back a little while the litter flies in
     const heaps = Math.sin(span(p, 0.38, 0.74) * Math.PI); // come forward for the heaps and bales
     const end = ease(span(p, 0.74, 0.95));
-    to.set(pointer.x * 0.9 - heaps * 1.5, 3.6 + up * 2.5 + heaps * 0.6 + pointer.y * 0.4, 15 - heaps * 2 - end * 2.5);
+    to.set(pointer.x * 0.9 - heaps * 1.2, 4.2 + fly * 1.2 + heaps * 0.4 + pointer.y * 0.4, 16 + fly * 1.5 - heaps * 2.5 - end * 3);
     camera.position.lerp(to, 0.07);
-    look.set(0, 2.2 + up * 2.8 - heaps * 0.8 + end * 0.2, -0.5 + heaps * 2);
+    look.set(0, 1.6 + fly * 0.4 - heaps * 0.6 + end * 0.3, heaps * 1.6);
     camera.lookAt(look);
   });
   return null;
@@ -423,7 +387,6 @@ export function RecycleScene({ progress }: { progress: MutableRefObject<number> 
       <Letters progress={progress} letters={letters} />
       <Pieces progress={progress} letters={letters} />
       <Vines progress={progress} letters={letters} />
-      <Billboard progress={progress} />
       <Park />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.5, 0]} receiveShadow>
         <circleGeometry args={[90, 64]} />

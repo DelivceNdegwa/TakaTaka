@@ -9,7 +9,7 @@ import { RecycleScene } from './three/RecycleScene';
 gsap.registerPlugin(ScrollTrigger);
 
 const STAGES = [
-  { at: 0.2, n: '01', title: 'Collected', text: 'Cans, bottles, cartons, newspaper and bags lifted off the ground and into the cage, not the drains.', right: true },
+  { at: 0.2, n: '01', title: 'Collected', text: 'Cans, bottles, cartons, newspaper and bags picked up off the grass and packed into the TAKA frame.', right: true },
   { at: 0.47, n: '02', title: 'Sorted', text: 'Metal, plastic, cartons, paper, card and bags. Sorted by type, each one is raw material again.' },
   { at: 0.64, n: '03', title: 'Baled', text: 'Pressed into tight bales, ready for the recycler to turn into something new.' },
   { at: 0.87, n: '04', title: 'Green again', text: 'With the waste gone, the green takes the empty frame back. Nature takes it back.' },

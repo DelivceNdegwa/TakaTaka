@@ -142,6 +142,9 @@ export const GameScene = forwardRef<GameHandle, {
   const flight = useRef<Flight | null>(null);
   const drag = useRef<{ x: number; y: number; t: number; sx: number; sy: number } | null>(null);
   const aim = useRef(0);
+  const hit = useMemo(() => new THREE.Vector3(), []);
+  const binPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), -BIN_Z), []);
+  const handPlane = useMemo(() => new THREE.Plane(new THREE.Vector3(0, 0, 1), -3), []);
   const [hover, setHover] = useState<Target | null>(null);
   const { size, camera } = useThree();
   const rest = useMemo(() => new THREE.Vector3(0, 1.2, 3), []);
@@ -169,17 +172,16 @@ export const GameScene = forwardRef<GameHandle, {
   };
   const move = (e: ThreeEvent<PointerEvent>) => {
     if (!drag.current || !held.current) return;
-    const dx = (e.clientX - drag.current.sx) / size.width;
-    const dy = (e.clientY - drag.current.sy) / size.height;
-    held.current.position.set(dx * 9, rest.y - dy * 3, rest.z + Math.min(0, dy) * 2);
-    aim.current = dx * 9;
+    // aim at the exact spot the pointer points to on the row of bins, and carry the piece under the pointer
+    if (e.ray.intersectPlane(binPlane, hit)) aim.current = hit.x;
+    if (e.ray.intersectPlane(handPlane, hit)) held.current.position.set(THREE.MathUtils.clamp(hit.x, -5, 5), THREE.MathUtils.clamp(hit.y, 0.6, 3), rest.z);
     const h = pickTarget(aim.current);
     setHover(h === 'street' ? null : h);
     drag.current.x = e.clientX; drag.current.y = e.clientY; drag.current.t = performance.now();
   };
   const up = (e: ThreeEvent<PointerEvent>) => {
     if (!drag.current) return;
-    const flung = drag.current.sy - e.clientY > 30;
+    const flung = drag.current.sy - e.clientY > 24;
     drag.current = null;
     setHover(null);
     if (!flung) { held.current?.position.copy(rest); return; }

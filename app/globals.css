@@ -334,3 +334,14 @@ html.locked, html.locked body { overflow: hidden; }
 .story__intro p { font-size: 1.0625rem; max-width: 40ch; }
 .story__intro .hint { margin-top: 18px; }
 .stairs { margin-top: 0; background: transparent; }
+
+/* Gate: a bright patch of grass with a bin */
+.gate { background: linear-gradient(180deg, #cfe3ea 0%, #eef4ec 52%, #ffffff 100%); color: var(--ink); }
+.gate__copy, .gate__actions { opacity: 1; transform: none; }
+.gate__title { color: var(--ink); }
+.gate__title em { color: var(--green); }
+.gate__copy p:not(.gate__title) { color: var(--ink-2); }
+.gate__actions button, .gate__actions button:first-child { background: #fff; color: var(--ink); border: 1px solid #dfe5df; box-shadow: 0 6px 18px rgba(17,22,17,0.08); }
+.gate__actions button:hover { background: var(--green); color: #fff; border-color: var(--green); }
+.gate__copy .gate__title { font-size: clamp(2.4rem, 6vw, 4.6rem); margin: 0; color: var(--ink); }
+.gate__copy .gate__title + p { margin-top: 14px; }
