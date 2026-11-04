@@ -162,7 +162,7 @@ function Pieces({ progress }: { progress: MutableRefObject<number> }) {
         const i = s * PER + j;
         const i3 = i * 3;
         const d = data.delay[i];
-        const fall = ease(span(p, 0.02 + d * 0.28, 0.1 + d * 0.28));
+        const fall = ease(span(p, 0.06 + d * 0.26, 0.14 + d * 0.26));
         const sort = ease(span(p, 0.42 + d * 0.1, 0.52 + d * 0.1));
         const form = ease(span(p, 0.68 + d * 0.14, 0.8 + d * 0.14));
         a.set(data.sky[i3], data.sky[i3 + 1], data.sky[i3 + 2]);
@@ -241,28 +241,97 @@ function Billboard({ progress }: { progress: MutableRefObject<number> }) {
   );
 }
 
-// Nairobi skyline in the haze: low blocks and the KICC drum and saucer
-function Skyline() {
-  const blocks = useMemo(() => {
-    const r = seeded(21);
-    return Array.from({ length: 60 }, () => {
-      const x = (r() - 0.5) * 80;
-      return { x, z: -22 - r() * 20, h: 2 + r() * (Math.abs(x) < 16 ? 12 : 6), w: 1.4 + r() * 2.6 };
-    });
+// Soft cloud sprites: the camera starts above them and descends through the mist
+function cloudTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 256;
+  const g = c.getContext('2d')!;
+  const grad = g.createRadialGradient(128, 128, 0, 128, 128, 128);
+  grad.addColorStop(0, 'rgba(255,255,255,0.95)');
+  grad.addColorStop(0.45, 'rgba(255,255,255,0.55)');
+  grad.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 256, 256);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+function Clouds({ progress }: { progress: MutableRefObject<number> }) {
+  const group = useRef<THREE.Group>(null);
+  const [tex] = useState(() => (typeof document === 'undefined' ? null : cloudTexture()));
+  const puffs = useMemo(() => {
+    const r = seeded(41);
+    return Array.from({ length: 46 }, () => ({ x: (r() - 0.5) * 40, y: 9 + r() * 9, z: (r() - 0.5) * 30 - 2, s: 6 + r() * 10, spin: r() * Math.PI, o: 0.5 + r() * 0.4 }));
   }, []);
+  useFrame(({ clock, camera }) => {
+    const g = group.current;
+    if (!g) return;
+    g.position.x = Math.sin(clock.elapsedTime * 0.05) * 1.5;
+    // clouds part and thin out once we are below them
+    const thin = 1 - span(progress.current, 0.04, 0.16);
+    g.children.forEach((m, i) => {
+      m.quaternion.copy(camera.quaternion);
+      ((m as THREE.Mesh).material as THREE.MeshBasicMaterial).opacity = puffs[i].o * (0.25 + thin * 0.75);
+    });
+  });
+  if (!tex) return null;
   return (
-    <group>
-      {blocks.map((b, i) => (
-        <mesh key={i} position={[b.x, b.h / 2 - 0.5, b.z]}>
-          <boxGeometry args={[b.w, b.h, b.w]} />
-          <meshStandardMaterial color="#dfe3dd" roughness={1} />
+    <group ref={group}>
+      {puffs.map((p, i) => (
+        <mesh key={i} position={[p.x, p.y, p.z]} scale={p.s}>
+          <planeGeometry args={[1, 0.6]} />
+          <meshBasicMaterial map={tex} transparent depthWrite={false} fog={false} opacity={p.o} />
         </mesh>
       ))}
-      <group position={[11, -0.5, -26]}>
-        <mesh position={[0, 6, 0]}><cylinderGeometry args={[1, 1, 12, 24]} /><meshStandardMaterial color="#d3cabd" roughness={1} /></mesh>
-        <mesh position={[0, 12.3, 0]}><cylinderGeometry args={[1.9, 1.3, 0.6, 32]} /><meshStandardMaterial color="#cbbfae" roughness={1} /></mesh>
-        <mesh position={[0, 13.2, 0]}><coneGeometry args={[0.25, 1.4, 12]} /><meshStandardMaterial color="#cbbfae" /></mesh>
+    </group>
+  );
+}
+
+// Nairobi from the National Park: grassland, acacias, the skyline and the Ngong Hills in the haze
+function Park() {
+  const city = useMemo(() => {
+    const r = seeded(21);
+    return Array.from({ length: 46 }, () => {
+      const x = (r() - 0.5) * 46 - 4;
+      return { x, z: -34 - r() * 10, h: 2 + r() * (Math.abs(x + 4) < 12 ? 13 : 6), w: 1.4 + r() * 2.4 };
+    });
+  }, []);
+  const acacias = useMemo(() => [[-10, -9, 1.2], [-15, -14, 1.5], [9.5, -8, 1.1], [15, -16, 1.6], [-6, -20, 1], [21, -22, 1.3]] as const, []);
+  return (
+    <group>
+      {city.map((b, i) => (
+        <mesh key={i} position={[b.x, b.h / 2 - 0.5, b.z]}>
+          <boxGeometry args={[b.w, b.h, b.w]} />
+          <meshStandardMaterial color="#cfd9dc" roughness={1} />
+        </mesh>
+      ))}
+      <group position={[4, -0.5, -38]}>
+        <mesh position={[0, 6, 0]}><cylinderGeometry args={[1, 1, 12, 24]} /><meshStandardMaterial color="#d6cdbf" roughness={1} /></mesh>
+        <mesh position={[0, 12.3, 0]}><cylinderGeometry args={[1.9, 1.3, 0.6, 32]} /><meshStandardMaterial color="#cfc3b1" roughness={1} /></mesh>
+        <mesh position={[0, 13.2, 0]}><coneGeometry args={[0.25, 1.4, 12]} /><meshStandardMaterial color="#cfc3b1" /></mesh>
       </group>
+      {/* Ngong Hills: soft knuckles on the horizon */}
+      {[-30, -20, -11, -3].map((x, i) => (
+        <mesh key={i} position={[x - 14, -2, -60]} scale={[9 + i, 5 + (i % 2) * 2, 6]}>
+          <sphereGeometry args={[1, 32, 16]} />
+          <meshStandardMaterial color="#b7cdb4" roughness={1} />
+        </mesh>
+      ))}
+      {acacias.map(([x, z, k], i) => (
+        <group key={i} position={[x, -0.5, z]} scale={k}>
+          <mesh position={[0, 1.3, 0]} castShadow><cylinderGeometry args={[0.07, 0.12, 2.6, 10]} /><meshStandardMaterial color="#6b4a2c" roughness={0.9} /></mesh>
+          {/* layered umbrella canopy: a few soft tiers, darker underneath */}
+          {[[0, 2.75, 0, 2.2, 0.34, 1.6, '#3f8a3c'], [0.9, 2.95, 0.3, 1.4, 0.28, 1.1, '#4f9a45'], [-0.8, 2.9, -0.2, 1.3, 0.26, 1.0, '#47923f'], [0.1, 2.55, 0, 2.0, 0.16, 1.4, '#2f6e2e']].map(([x, y, z, sx, sy, sz, c], j) => (
+            <mesh key={j} position={[x as number, y as number, z as number]} scale={[sx as number, sy as number, sz as number]} castShadow>
+              <icosahedronGeometry args={[1, 3]} />
+              <meshStandardMaterial color={c as string} roughness={0.85} />
+            </mesh>
+          ))}
+          <mesh position={[0.45, 2.2, 0]} rotation={[0, 0, -0.7]}><cylinderGeometry args={[0.04, 0.06, 1.1, 8]} /><meshStandardMaterial color="#6b4a2c" /></mesh>
+          <mesh position={[-0.45, 2.2, 0]} rotation={[0, 0, 0.7]}><cylinderGeometry args={[0.04, 0.06, 1.1, 8]} /><meshStandardMaterial color="#6b4a2c" /></mesh>
+        </group>
+      ))}
     </group>
   );
 }
@@ -272,13 +341,15 @@ function Rig({ progress }: { progress: MutableRefObject<number> }) {
   const to = useMemo(() => new THREE.Vector3(), []);
   useFrame(() => {
     const p = progress.current;
+    // descend from above the clouds into the park
+    const descend = 1 - ease(span(p, 0, 0.14));
     const sortView = Math.sin(span(p, 0.4, 0.7) * Math.PI);
     const end = ease(span(p, 0.7, 0.95));
     const x = pointer.x * 0.8 + sortView * 2.2;
-    const y = 4.2 + pointer.y * 0.4 + sortView * 1.5 - end * 0.2;
-    const z = 13 - sortView * 1 - end * 1.5;
+    const y = 4.2 + descend * 13 + pointer.y * 0.4 + sortView * 1.5 - end * 0.2;
+    const z = 13 + descend * 4 - sortView * 1 - end * 1.5;
     camera.position.lerp(to.set(x, y, z), 0.07);
-    camera.lookAt(0, 3.6 - sortView * 1.4 + end * 0.6, 0);
+    camera.lookAt(0, 3.6 + descend * 6 - sortView * 1.4 + end * 0.6, 0);
   });
   return null;
 }
@@ -286,18 +357,18 @@ function Rig({ progress }: { progress: MutableRefObject<number> }) {
 export function RecycleScene({ progress }: { progress: MutableRefObject<number> }) {
   return (
     <>
-      <color attach="background" args={['#ffffff']} />
-      <fog attach="fog" args={['#ffffff', 18, 48]} />
-      <hemisphereLight args={['#ffffff', '#d9d2c4', 1.6]} />
-      <directionalLight position={[-7, 12, 8]} intensity={2.6} castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-12} shadow-camera-right={12} shadow-camera-top={12} shadow-camera-bottom={-4} shadow-bias={-0.0004} />
-      <directionalLight position={[6, 4, -6]} intensity={0.6} color="#e8f5ea" />
+      <fog attach="fog" args={['#eef4ec', 20, 70]} />
+      <hemisphereLight args={['#ffffff', '#a9c49a', 1.5]} />
+      <directionalLight position={[-7, 12, 8]} intensity={2.6} color="#fff6e6" castShadow shadow-mapSize={[2048, 2048]} shadow-camera-left={-12} shadow-camera-right={12} shadow-camera-top={12} shadow-camera-bottom={-4} shadow-bias={-0.0004} />
+      <directionalLight position={[6, 4, -6]} intensity={0.5} color="#e8f5ea" />
       <Rig progress={progress} />
       <Billboard progress={progress} />
       <Pieces progress={progress} />
-      <Skyline />
+      <Park />
+      <Clouds progress={progress} />
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.5, 0]} receiveShadow>
-        <planeGeometry args={[200, 200]} />
-        <meshStandardMaterial color="#ffffff" roughness={1} />
+        <circleGeometry args={[90, 64]} />
+        <meshStandardMaterial color="#d3e4c5" roughness={1} />
       </mesh>
     </>
   );

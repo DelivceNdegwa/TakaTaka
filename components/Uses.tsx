@@ -46,6 +46,9 @@ export function Uses() {
     const el = root.current, t = track.current;
     if (!el || !t) return;
     const ctx = gsap.context(() => {
+      if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        gsap.fromTo(el, { clipPath: 'inset(8% 10% 0% 10% round 32px)' }, { clipPath: 'inset(0% 0% 0% 0% round 0px)', ease: 'none', scrollTrigger: { trigger: el, start: 'top bottom', end: 'top top', scrub: true } });
+      }
       gsap.to(t, {
         x: () => -(t.scrollWidth - innerWidth),
         ease: 'none',

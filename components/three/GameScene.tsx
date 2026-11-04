@@ -3,7 +3,7 @@
 import { useFrame, useThree, type ThreeEvent } from '@react-three/fiber';
 import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Html, RoundedBox } from '@react-three/drei';
+import { RoundedBox } from '@react-three/drei';
 
 export type Target = 'plastic' | 'organic' | 'paper' | 'river';
 export type Item = { name: string; bin: Exclude<Target, 'river'>; kind: 'bottle' | 'can' | 'peel' | 'scraps' | 'paper' | 'box' };
@@ -71,7 +71,7 @@ function Bin({ x, colour, label, open }: { x: number; colour: string; label: str
           <meshPhysicalMaterial color={white ? '#1a1a1a' : colour} roughness={0.3} clearcoat={0.8} />
         </RoundedBox>
       </group>
-      <Html position={[0, 2.55, 0]} center className="tag">{label}</Html>
+      <Label text={label} position={[0, 2.55, 0]} />
     </group>
   );
 }
@@ -91,8 +91,33 @@ function River({ dirt }: { dirt: number }) {
       </mesh>
       <mesh position={[-1.3, 0.1, -3]}><boxGeometry args={[0.2, 0.2, 14]} /><meshStandardMaterial color="#f2f2f2" /></mesh>
       <mesh position={[1.3, 0.1, -3]}><boxGeometry args={[0.2, 0.2, 14]} /><meshStandardMaterial color="#f2f2f2" /></mesh>
-      <Html position={[0, 0.7, 0.5]} center className="tag tag--river">Nairobi River</Html>
+      <Label text="Nairobi River" position={[0, 0.8, 0.5]} bg="#1b9ab8" fg="#ffffff" />
     </group>
+  );
+}
+
+// Labels drawn into the scene as sprites: crisp pills that always face the camera
+function Label({ text, position, bg = '#ffffff', fg = '#111611' }: { text: string; position: [number, number, number]; bg?: string; fg?: string }) {
+  const { tex, aspect } = useMemo(() => {
+    const c = document.createElement('canvas');
+    const g = c.getContext('2d')!;
+    const font = '600 44px "Instrument Sans", system-ui, sans-serif';
+    g.font = font;
+    const w = Math.ceil(g.measureText(text).width) + 64;
+    c.width = w; c.height = 84;
+    g.font = font;
+    g.fillStyle = bg;
+    g.beginPath(); g.roundRect(0, 0, w, 84, 42); g.fill();
+    g.fillStyle = fg; g.textBaseline = 'middle'; g.fillText(text, 32, 44);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 4;
+    return { tex: t, aspect: w / 84 };
+  }, [text, bg, fg]);
+  return (
+    <sprite position={position} scale={[0.36 * aspect, 0.36, 1]}>
+      <spriteMaterial map={tex} transparent depthTest={false} toneMapped={false} />
+    </sprite>
   );
 }
 

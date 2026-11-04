@@ -20,10 +20,10 @@ const PATHS = [
 
 export function FlipSide() {
   return (
-    <Reveal as="section" className="flip">
+    <Reveal as="section" className="flip" grow>
       <div className="flip__head" id="problem">
         <h2 data-rise>The same waste, <span>in the wrong place.</span></h2>
-        <p data-rise>
+        <p data-words>
           Kenya banned plastic carrier bags in 2017, but bottles, wrappers and food waste still end up on roadsides, in drains and at the dumpsite in Dandora. Where it lands decides whether it becomes something new or a problem.
         </p>
       </div>
@@ -32,7 +32,7 @@ export function FlipSide() {
           <article key={p.title} className="path" data-rise>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{p.icon}</svg>
             <h3>{p.title}</h3>
-            <p>{p.text}</p>
+            <p data-words>{p.text}</p>
           </article>
         ))}
       </div>

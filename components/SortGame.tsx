@@ -62,7 +62,7 @@ export function SortGame() {
   const health = Math.round((1 - dirt) * 100);
 
   return (
-    <section className="game light" id="play" aria-labelledby="play-title">
+    <section className="game light columns" id="play" aria-labelledby="play-title">
       <div className="game__head">
         <h2 id="play-title">Where does <span>it go?</span></h2>
         <p>Grab the piece and flick it up towards a bin. Try the river too, if you want to see what it costs. Or choose a place with the buttons below.</p>

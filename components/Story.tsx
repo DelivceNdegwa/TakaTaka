@@ -36,7 +36,7 @@ export function Story() {
         scrollTrigger: { trigger: el, start: 'top top', end: 'bottom bottom', scrub: 0.8, onUpdate: (s) => { progress.current = s.progress; } },
         defaults: { ease: 'none' },
       });
-      tl.to('.story__intro', { autoAlpha: 0, y: -40, filter: 'blur(6px)', duration: 0.06 }, 0.04);
+      tl.to('.story__intro', { autoAlpha: 0, y: -40, filter: 'blur(6px)', duration: 0.06 }, 0.06);
       STAGES.forEach((s, i) => {
         const cap = `.cap[data-i="${i}"]`;
         tl.fromTo(cap, { autoAlpha: 0, y: 40, filter: 'blur(8px)' }, { autoAlpha: 1, y: 0, filter: 'blur(0px)', duration: 0.05 }, s.at - 0.04);
@@ -52,7 +52,7 @@ export function Story() {
     <section className="story" ref={root} aria-label="From waste to value">
       <div className="story__stage">
         <div className="story__canvas" aria-hidden="true">
-          <Canvas shadows frameloop={live ? 'always' : 'never'} dpr={[1, 1.5]} camera={{ position: [0, 4, 13], fov: 42 }} gl={{ antialias: true, powerPreference: 'high-performance' }}>
+          <Canvas shadows frameloop={live ? 'always' : 'never'} dpr={[1, 1.5]} camera={{ position: [0, 17, 17], fov: 42 }} gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}>
             <RecycleScene progress={progress} />
           </Canvas>
         </div>

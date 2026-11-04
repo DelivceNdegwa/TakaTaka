@@ -231,3 +231,27 @@ p { margin: 0; text-wrap: pretty; }
 .foot { color: #fff; background: var(--brown); border-top: 0; margin: 120px calc(-1 * clamp(16px, 5vw, 72px)) -64px; padding: 28px clamp(16px, 5vw, 72px); }
 .btn.btn--ghost { background: transparent; color: var(--ink); border: 1px solid #d4d4d4; }
 .btn.btn--ghost:hover { background: var(--ink); color: #fff; }
+
+/* ---- Editorial type: heavy grotesque with a serif italic voice ---- */
+h1, h2, h3 { font-family: var(--font-display), sans-serif; font-weight: 800; letter-spacing: -0.035em; line-height: 0.92; }
+.serif, .story__intro h1 em, .pledge h2 span, .game__head h2 span { font-family: var(--font-serif), serif; font-style: italic; font-weight: 400; text-transform: none; letter-spacing: -0.01em; }
+.story__intro h1 { font-size: clamp(3rem, 8.4vw, 6rem); }
+.cap b { font-family: var(--font-serif), serif; font-style: italic; font-weight: 400; font-size: clamp(4rem, 10vw, 6rem); }
+.cap h2 { font-size: clamp(2.2rem, 4.6vw, 3.6rem); }
+.logo { font-family: var(--font-display); font-weight: 800; letter-spacing: -0.02em; font-size: 1.05rem; }
+.uses__head h2 span, .flip__head h2 span { font-family: var(--font-serif), serif; font-style: italic; font-weight: 400; text-transform: none; }
+
+/* Hero: soft sky over the park, the scene floats in it */
+.story__stage { background: linear-gradient(180deg, #b9d6e3 0%, #dbe9ee 34%, #eef4ec 58%, #ffffff 100%); }
+.story__vignette { background: linear-gradient(to top, #fff 0%, transparent 16%); }
+
+/* Section change: the next chapter grows from an inset card to full bleed */
+.grow { clip-path: inset(0 0 0 0 round 0); will-change: clip-path; }
+
+/* Word-by-word scroll reading */
+.words .w { opacity: 0.18; transition: none; }
+
+/* Faint column lines on the light editorial sections */
+.columns { position: relative; }
+.columns::before { content: ''; position: absolute; inset: 0; pointer-events: none; z-index: 0; background: linear-gradient(90deg, transparent calc(25% - 0.5px), rgba(17,22,17,0.07) calc(25% - 0.5px), rgba(17,22,17,0.07) calc(25% + 0.5px), transparent calc(25% + 0.5px), transparent calc(50% - 0.5px), rgba(17,22,17,0.07) calc(50% - 0.5px), rgba(17,22,17,0.07) calc(50% + 0.5px), transparent calc(50% + 0.5px), transparent calc(75% - 0.5px), rgba(17,22,17,0.07) calc(75% - 0.5px), rgba(17,22,17,0.07) calc(75% + 0.5px), transparent calc(75% + 0.5px)); }
+.columns > * { position: relative; z-index: 1; }
