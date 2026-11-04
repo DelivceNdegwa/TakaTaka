@@ -5,7 +5,6 @@ import { Environment, Lightformer, RoundedBox } from '@react-three/drei';
 import gsap from 'gsap';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { crunch, setSound, thud } from './sound';
 import { canGeometry, canTexture } from './three/trash';
 
 const ROWS = ['RTYUIOPDKFJHLKWEQ', 'FUOTUPATAKAGIYLRS', 'YEVGMAHALIPAKEBRQ', 'RTIOBNMSDUAPYEGJR', 'FPOIMEUFOYDBZUALH'];
@@ -81,7 +80,7 @@ function GateScene({ dropping, onIn }: { dropping: boolean; onIn: () => void }) 
         g.position.y -= dt * 7;
       }
       g.rotation.z += dt * 4;
-      if (g.position.y < BIN.y + 0.2 && !done.current) { done.current = true; thud(); onIn(); }
+      if (g.position.y < BIN.y + 0.2 && !done.current) { done.current = true; onIn(); }
     } else if (!drag.current) {
       // swing gently back to rest on its string
       const k = Math.min(dt, 0.05);
@@ -124,7 +123,7 @@ function GateScene({ dropping, onIn }: { dropping: boolean; onIn: () => void }) 
         <lineBasicMaterial color="#8a8f8a" />
       </lineSegments>
       <group ref={can} position={[0, 0.6, 0]}
-        onPointerDown={(e) => { e.stopPropagation(); drag.current = true; crunch(); document.body.style.cursor = 'grabbing'; }}
+        onPointerDown={(e) => { e.stopPropagation(); drag.current = true; document.body.style.cursor = 'grabbing'; }}
         onPointerOver={() => { document.body.style.cursor = 'grab'; }} onPointerOut={() => { document.body.style.cursor = ''; }}>
         <mesh geometry={geo} material={mat} scale={1.5} castShadow />
         <mesh visible={false}><sphereGeometry args={[1.2, 8, 8]} /></mesh>
@@ -147,7 +146,6 @@ function GateScene({ dropping, onIn }: { dropping: boolean; onIn: () => void }) 
 export function Gate() {
   const [stage, setStage] = useState<'pre' | 'gate' | 'out' | 'gone'>('pre');
   const [dropping, setDropping] = useState(false);
-  const [withSound, setWithSound] = useState(true);
   const root = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -158,7 +156,6 @@ export function Gate() {
   const enter = () => {
     if (stage !== 'gate') return;
     setStage('out');
-    setSound(withSound);
     const el = root.current!;
     // the site opens out of the bin, like ink spreading
     gsap.fromTo(el, { clipPath: 'circle(150% at 50% 82%)' }, {
@@ -193,8 +190,7 @@ export function Gate() {
         <p>Drag the can into the bin to enter, or press Enter.</p>
       </div>
       <div className="gate__actions" data-show={stage !== 'pre'}>
-        <button type="button" className={withSound ? 'is-on' : ''} onClick={() => { setWithSound(true); setDropping(true); }}>Enter with sound <i aria-hidden="true" /></button>
-        <button type="button" className={!withSound ? 'is-on' : ''} onClick={() => { setWithSound(false); setDropping(true); }}>Enter quietly</button>
+        <button type="button" onClick={() => setDropping(true)}>Drop it in for me</button>
       </div>
       {stage === 'pre' && <Preloader onDone={() => setStage('gate')} />}
     </div>

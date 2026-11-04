@@ -9,11 +9,11 @@ import { RecycleScene } from './three/RecycleScene';
 gsap.registerPlugin(ScrollTrigger);
 
 const STAGES = [
-  { at: 0.2, n: '01', title: 'Collected', text: 'Cans, bottles, milk cartons, newspaper and bags picked off Nairobi streets fill the cage instead of the drains.', right: true },
-  { at: 0.49, n: '02', title: 'Sorted', text: 'Metal, plastic, cartons, paper and card. Sorted by type, each one is raw material again.' },
-  { at: 0.68, n: '03', title: 'Taka is value', text: 'What we throw away is a resource when it is in the right place.' },
-  { at: 0.88, n: '04', title: 'Green again', text: 'Less in the drains and dumps means more room for the green. Nature takes it back.' },
-]
+  { at: 0.2, n: '01', title: 'Collected', text: 'Cans, bottles, cartons, newspaper and bags lifted off the ground and into the cage, not the drains.', right: true },
+  { at: 0.47, n: '02', title: 'Sorted', text: 'Metal, plastic, cartons, paper, card and bags. Sorted by type, each one is raw material again.' },
+  { at: 0.64, n: '03', title: 'Baled', text: 'Pressed into tight bales, ready for the recycler to turn into something new.' },
+  { at: 0.87, n: '04', title: 'Green again', text: 'With the waste gone, the green takes the empty frame back. Nature takes it back.' },
+];
 
 export function Story() {
   const root = useRef<HTMLElement>(null);
@@ -53,7 +53,7 @@ export function Story() {
     <section className="story" ref={root} aria-label="From waste to value">
       <div className="story__stage">
         <div className="story__canvas" aria-hidden="true">
-          <Canvas shadows frameloop={live ? 'always' : 'never'} dpr={[1, 1.5]} camera={{ position: [0, 17, 17], fov: 42 }} gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}>
+          <Canvas shadows frameloop={live ? 'always' : 'never'} dpr={[1, 1.5]} camera={{ position: [0, 3.6, 15], fov: 42 }} gl={{ antialias: true, alpha: true, powerPreference: 'high-performance' }}>
             <RecycleScene progress={progress} />
           </Canvas>
         </div>

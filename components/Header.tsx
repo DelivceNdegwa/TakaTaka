@@ -5,7 +5,6 @@ import { Environment, Lightformer } from '@react-three/drei';
 import gsap from 'gsap';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { onSound, setSound, soundOn } from './sound';
 import { cartonGeometry, cartonTexture } from './three/trash';
 
 const LINKS = [
@@ -34,12 +33,9 @@ function go(href: string) {
 
 export function Header() {
   const [open, setOpen] = useState(false);
-  const [sound, setSnd] = useState(false);
   const panel = useRef<HTMLDivElement>(null);
   const shade = useRef<HTMLDivElement>(null);
   const card = useRef<HTMLDivElement>(null);
-
-  useEffect(() => onSound(setSnd), []);
 
   useEffect(() => {
     const p = panel.current, s = shade.current, c = card.current;
@@ -74,9 +70,6 @@ export function Header() {
           Taka Green
         </a>
         <div className="bar__right">
-          <button type="button" className="chip chip--icon" aria-pressed={sound} aria-label={sound ? 'Turn sound off' : 'Turn sound on'} onClick={() => setSound(!soundOn())}>
-            <span className={`eq${sound ? ' is-on' : ''}`} aria-hidden="true"><i /><i /><i /><i /></span>
-          </button>
           <button type="button" className="chip chip--lime" aria-expanded={open} aria-controls="menu" onClick={() => setOpen((o) => !o)}>
             <span className="burger" data-open={open} aria-hidden="true"><i /><i /></span>{open ? 'Close' : 'Menu'}
           </button>

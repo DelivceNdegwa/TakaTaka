@@ -2,7 +2,6 @@
 
 import { Canvas } from '@react-three/fiber';
 import { useEffect, useRef, useState } from 'react';
-import { chime, crunch, thud } from './sound';
 import { GameScene, ITEMS, TARGETS, type GameHandle, type Target } from './three/GameScene';
 
 const STREET_LINES = [
@@ -37,18 +36,15 @@ export function SortGame() {
   const land = (where: Target | 'street') => {
     const label = TARGETS.find((t) => t.id === where)?.label;
     if (where === item.bin) {
-      thud(); chime(true);
       setRight((n) => n + 1);
       setStreak((n) => { const next = n + 1; setBest((b) => Math.max(b, next)); return next; });
       setToast({ tone: 'good', title: streak + 1 >= 3 ? `Mahali pake! ${streak + 1} in a row` : 'Mahali pake!', text: `${item.name} in ${label}. That is one more thing that can become something new.` });
     } else if (where === 'street') {
-      chime(false);
       setWrong((n) => n + 1);
       setStreak(0);
       setLitter((l) => Math.min(30, l + 1));
       setToast({ tone: 'bad', title: 'Dropped on the street', text: STREET_LINES[wrong % STREET_LINES.length] });
     } else {
-      thud(); chime(false);
       setWrong((n) => n + 1);
       setStreak(0);
       setToast({ tone: 'bad', title: 'Wrong bin', text: `${item.name} belongs in ${TARGETS.find((t) => t.id === item.bin)?.label}. Mixed waste is much harder to recycle.` });
@@ -72,7 +68,7 @@ export function SortGame() {
       </div>
       <div className="arena" ref={box}>
         <Canvas shadows dpr={[1, 1.5]} frameloop={live ? 'always' : 'never'} camera={{ position: [0, 3.4, 7.2], fov: 46 }}>
-          <GameScene ref={game} item={item} busy={busy} litter={litter} onThrow={() => { crunch(); setBusy(true); }} onLand={land} />
+          <GameScene ref={game} item={item} busy={busy} litter={litter} onThrow={() => setBusy(true)} onLand={land} />
         </Canvas>
         <div className="hud">
           <div className="score" aria-live="polite">
